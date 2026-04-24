@@ -27,7 +27,7 @@ while True:
 
     cv2.imshow("Face Detection", frame)
 
-    cv2.putText(frame, f"Total Faces: {face_count}", (10, 30),
+    cv2.putText(frame, f"Faces B: {face_count}", (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     if cv2.waitKey(1) & 0xFF == 27:

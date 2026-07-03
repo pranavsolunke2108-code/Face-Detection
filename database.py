@@ -30,14 +30,32 @@ CREATE TABLE IF NOT EXISTS attendance (
 
     username TEXT NOT NULL,
 
+    subject TEXT NOT NULL,
+
     date TEXT NOT NULL,
 
     time TEXT NOT NULL
 )
 """)
 
+# -----------------------------------
+# Active Session Table
+# -----------------------------------
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS active_session (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    subject TEXT NOT NULL,
+
+    start_time TEXT NOT NULL,
+
+    end_time TEXT NOT NULL
+)
+""")
+
 conn.commit()
 
-print("Database and tables created successfully")
+print("Database created successfully")
 
 conn.close()

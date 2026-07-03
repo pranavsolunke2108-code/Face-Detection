@@ -18,13 +18,16 @@ app = Flask(__name__)
 app.secret_key = "mysecretkey"
 
 # -----------------------------------
-# Load Known Faces
+# Known Faces
 # -----------------------------------
 known_encodings = []
 known_names = []
 
 KNOWN_FACES_DIR = "known_faces"
 
+# -----------------------------------
+# Load Faces Function
+# -----------------------------------
 def load_known_faces():
 
     global known_encodings
@@ -62,15 +65,12 @@ def load_known_faces():
 
         else:
 
-            print(f"[ERROR] No detectable face in: {file}")
+            print(
+                f"[ERROR] No detectable face in: {file}"
+            )
 
-# Initial Load
+# Initial Face Load
 load_known_faces()
-
-# -----------------------------------
-# Attendance Tracking
-# -----------------------------------
-marked_attendance = set()
 
 # -----------------------------------
 # Webcam
@@ -93,7 +93,7 @@ def generate_frames():
         if not success:
             break
 
-        # Resize frame for better FPS
+        # Resize for performance
         small_frame = cv2.resize(
             frame,
             (0, 0),
@@ -141,49 +141,121 @@ def generate_frames():
                         ]
 
                         # -----------------------------------
-                        # Attendance Marking
+                        # Attendance Logic
                         # -----------------------------------
-                        if name not in marked_attendance:
+                        conn = sqlite3.connect(
+                            "users.db"
+                        )
 
-                            now = datetime.now()
+                        cursor = conn.cursor()
 
-                            current_date = now.strftime(
-                                "%Y-%m-%d"
-                            )
+                        # Get active session
+                        cursor.execute(
+                            """
+                            SELECT subject,
+                                   start_time,
+                                   end_time
 
-                            current_time = now.strftime(
-                                "%H:%M:%S"
-                            )
+                            FROM active_session
+                            LIMIT 1
+                            """
+                        )
 
-                            conn = sqlite3.connect(
-                                "users.db"
-                            )
+                        active_session = cursor.fetchone()
 
-                            cursor = conn.cursor()
+                        if active_session:
 
-                            cursor.execute(
-                                """
-                                INSERT INTO attendance
-                                (username, date, time)
+                            subject = active_session[0]
+                            start_time = active_session[1]
+                            end_time = active_session[2]
 
-                                VALUES (?, ?, ?)
-                                """,
-                                (
-                                    name,
-                                    current_date,
-                                    current_time
+                            current_time_obj = datetime.now().time()
+
+                            start_obj = datetime.strptime(
+                                start_time,
+                                "%H:%M"
+                            ).time()
+
+                            end_obj = datetime.strptime(
+                                end_time,
+                                "%H:%M"
+                            ).time()
+
+                            # Check valid session timing
+                            if start_obj <= current_time_obj <= end_obj:
+
+                                now = datetime.now()
+
+                                current_date = now.strftime(
+                                    "%Y-%m-%d"
                                 )
-                            )
 
-                            conn.commit()
+                                current_time = now.strftime(
+                                    "%H:%M:%S"
+                                )
 
-                            conn.close()
+                                # -----------------------------------
+                                # Prevent Duplicate Attendance
+                                # -----------------------------------
+                                cursor.execute(
+                                    """
+                                    SELECT *
+                                    FROM attendance
 
-                            marked_attendance.add(name)
+                                    WHERE username=?
+                                    AND subject=?
+                                    AND date=?
+                                    """,
+                                    (
+                                        name,
+                                        subject,
+                                        current_date
+                                    )
+                                )
 
-                            print(
-                                f"{name} attendance marked"
-                            )
+                                already_marked = cursor.fetchone()
+
+                                if not already_marked:
+
+                                    cursor.execute(
+                                        """
+                                        INSERT INTO attendance
+                                        (
+                                            username,
+                                            subject,
+                                            date,
+                                            time
+                                        )
+
+                                        VALUES (?, ?, ?, ?)
+                                        """,
+                                        (
+                                            name,
+                                            subject,
+                                            current_date,
+                                            current_time
+                                        )
+                                    )
+
+                                    conn.commit()
+
+                                    print(
+                                        f"{name} attendance marked for {subject}"
+                                    )
+
+                                else:
+
+                                    print(
+                                        f"{name} already marked for {subject}"
+                                    )
+
+                            else:
+
+                                print(
+                                    "Attendance session inactive"
+                                )
+
+                        conn.close()
 
                 face_names.append(name)
 
@@ -269,7 +341,6 @@ def register():
 
         username = request.form["username"]
 
-        # HASH PASSWORD
         password = generate_password_hash(
             request.form["password"]
         )
@@ -335,7 +406,6 @@ def login():
 
         cursor = conn.cursor()
 
-        # Fetch user only by username
         cursor.execute(
             """
             SELECT * FROM users
@@ -348,7 +418,6 @@ def login():
 
         conn.close()
 
-        # Verify hashed password
         if user and check_password_hash(
             user[2],
             password
@@ -404,10 +473,70 @@ def upload():
 
             image.save(save_path)
 
+            # Reload faces immediately
+            load_known_faces()
+
             message = "Face uploaded successfully"
 
     return render_template(
         "upload.html",
+        message=message
+    )
+
+# -----------------------------------
+# Create Attendance Session
+# -----------------------------------
+@app.route("/session", methods=["GET", "POST"])
+def session_page():
+
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    if session["role"] != "admin":
+        return "Access Denied"
+
+    message = ""
+
+    if request.method == "POST":
+
+        subject = request.form["subject"]
+
+        start_time = request.form["start_time"]
+
+        end_time = request.form["end_time"]
+
+        conn = sqlite3.connect("users.db")
+
+        cursor = conn.cursor()
+
+        # Remove old session
+        cursor.execute(
+            "DELETE FROM active_session"
+        )
+
+        # Insert new session
+        cursor.execute(
+            """
+            INSERT INTO active_session
+            (subject, start_time, end_time)
+
+            VALUES (?, ?, ?)
+            """,
+            (
+                subject,
+                start_time,
+                end_time
+            )
+        )
+
+        conn.commit()
+
+        conn.close()
+
+        message = "Session started successfully"
+
+    return render_template(
+        "session.html",
         message=message
     )
 
@@ -418,6 +547,7 @@ def upload():
 def dashboard():
 
     if "user" not in session:
+
         return redirect(
             url_for("login")
         )
@@ -428,12 +558,18 @@ def dashboard():
 
     cursor = conn.cursor()
 
+    # Attendance Data
     if session["role"] == "admin":
 
         cursor.execute(
             """
-            SELECT username, date, time
+            SELECT username,
+                   subject,
+                   date,
+                   time
+
             FROM attendance
+
             ORDER BY id DESC
             """
         )
@@ -442,9 +578,15 @@ def dashboard():
 
         cursor.execute(
             """
-            SELECT username, date, time
+            SELECT username,
+                   subject,
+                   date,
+                   time
+
             FROM attendance
+
             WHERE username=?
+
             ORDER BY id DESC
             """,
             (session["user"],)
@@ -452,13 +594,85 @@ def dashboard():
 
     attendance_data = cursor.fetchall()
 
+    # -----------------------------------
+    # Analytics
+    # -----------------------------------
+
+    # Total students
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM users
+        WHERE role='student'
+        """
+    )
+
+    total_students = cursor.fetchone()[0]
+
+    # Today's attendance
+    today_date = datetime.now().strftime(
+        "%Y-%m-%d"
+    )
+
+    cursor.execute(
+        """
+        SELECT COUNT(DISTINCT username)
+        FROM attendance
+        WHERE date=?
+        """,
+        (today_date,)
+    )
+
+    today_attendance = cursor.fetchone()[0]
+
+    # Attendance Percentage
+    attendance_percentage = 0
+
+    if total_students > 0:
+
+        attendance_percentage = round(
+            (
+                today_attendance /
+                total_students
+            ) * 100,
+            2
+        )
+
+    # -----------------------------------
+    # Active Session
+    # -----------------------------------
+    cursor.execute(
+        """
+        SELECT subject,
+               start_time,
+               end_time
+
+        FROM active_session
+
+        LIMIT 1
+        """
+    )
+
+    active_session = cursor.fetchone()
+
     conn.close()
 
     return render_template(
         "index.html",
+
         attendance=attendance_data,
+
         username=session["user"],
-        role=session["role"]
+
+        role=session["role"],
+
+        active_session=active_session,
+
+        total_students=total_students,
+
+        today_attendance=today_attendance,
+
+        attendance_percentage=attendance_percentage
     )
 
 # -----------------------------------
@@ -491,4 +705,8 @@ def logout():
 # -----------------------------------
 if __name__ == "__main__":
 
-    app.run(debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=True
+    )

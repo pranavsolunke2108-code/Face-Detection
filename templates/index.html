@@ -36,19 +36,137 @@
                 {{ role }}
             </span>
 
+            <a href="/upload"
+               class="btn btn-warning btn-sm me-2">
+                Upload Face
+            </a>
+
+            {% if role == "admin" %}
+
+            <a href="/session"
+               class="btn btn-primary btn-sm me-2">
+                Create Session
+            </a>
+
+            {% endif %}
+
             <a href="/logout"
                class="btn btn-danger btn-sm">
                 Logout
             </a>
-            <a href="/upload"
-   class="btn btn-warning btn-sm">
-    Upload Face
-</a>
+
         </div>
 
     </nav>
 
     <div class="container mt-4">
+        <!-- Analytics Cards -->
+
+<div class="row mb-4">
+
+    <div class="col-md-4">
+
+        <div class="card shadow text-center">
+
+            <div class="card-body">
+
+                <h5>Total Students</h5>
+
+                <h2 class="text-primary">
+
+                    {{ total_students }}
+
+                </h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card shadow text-center">
+
+            <div class="card-body">
+
+                <h5>Today's Attendance</h5>
+
+                <h2 class="text-success">
+
+                    {{ today_attendance }}
+
+                </h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card shadow text-center">
+
+            <div class="card-body">
+
+                <h5>Attendance %</h5>
+
+                <h2 class="text-danger">
+
+                    {{ attendance_percentage }}%
+
+                </h2>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+        <!-- Active Session -->
+        <div class="card shadow mb-4">
+
+            <div class="card-header bg-warning">
+
+                Active Attendance Session
+
+            </div>
+
+            <div class="card-body">
+
+                {% if active_session %}
+
+                    <h5>
+
+                        Subject:
+                        {{ active_session[0] }}
+
+                    </h5>
+
+                    <p>
+
+                        Time:
+                        {{ active_session[1] }}
+                        -
+                        {{ active_session[2] }}
+
+                    </p>
+
+                {% else %}
+
+                    <p>
+                        No active session
+                    </p>
+
+                {% endif %}
+
+            </div>
+
+        </div>
 
         <div class="row">
 
@@ -96,6 +214,7 @@
                                     <tr>
 
                                         <th>Name</th>
+                                        <th>Subject</th>
                                         <th>Date</th>
                                         <th>Time</th>
 
@@ -112,6 +231,7 @@
                                         <td>{{ row[0] }}</td>
                                         <td>{{ row[1] }}</td>
                                         <td>{{ row[2] }}</td>
+                                        <td>{{ row[3] }}</td>
 
                                     </tr>
 
